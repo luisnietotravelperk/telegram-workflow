@@ -2,7 +2,7 @@ import os
 from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, ContextTypes, filters
 
-TELEGRAM_TOKEN = os.environ.get("8426687900:AAGaVy8olTFoUQAPQlcsHXYw2-rxiFeT5f4")
+TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 DOWNLOAD_DIR = "downloads"
 
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
