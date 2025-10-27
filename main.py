@@ -1,7 +1,7 @@
 import os
 from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, ContextTypes, filters
-from pdf2epub import convert
+import pypandoc
 import smtplib
 from email.message import EmailMessage
 
