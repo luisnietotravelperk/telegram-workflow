@@ -1,1 +1,2 @@
 python-telegram-bot==20.6
+pdf2epub==0.5.6
