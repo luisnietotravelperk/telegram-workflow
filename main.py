@@ -1,4 +1,6 @@
 import os
+import requests
+import base64
 import re
 import smtplib
 from telegram import Update
@@ -40,6 +42,31 @@ def enviar_pdf_para_convertir(file_path):
         smtp.login(EMAIL_FROM, EMAIL_PASSWORD)
         smtp.send_message(msg)
 
+def enviar_pdf_via_resend_api(file_path):
+    with open(file_path, "rb") as f:
+        contenido = base64.b64encode(f.read()).decode()
+
+    data = {
+        "from": f"Tu Bot <{os.environ['EMAIL_FROM']}>",
+        "to": [os.environ["EMAIL_TO"]],
+        "subject": "Convert",
+        "attachments": [
+            {
+                "filename": os.path.basename(file_path),
+                "content": contenido,
+                "type": "application/pdf"
+            }
+        ]
+    }
+
+    headers = {
+        "Authorization": f"Bearer {os.environ['RESEND_API_KEY']}",
+        "Content-Type": "application/json"
+    }
+
+    response = requests.post("https://api.resend.com/emails", json=data, headers=headers)
+    print(f"Resend API status: {response.status_code}, body: {response.text}")
+
 # ✅ Manejador del bot cuando recibe un PDF
 async def handle_pdf(update: Update, context: ContextTypes.DEFAULT_TYPE):
     document = update.message.document
@@ -62,7 +89,7 @@ async def handle_pdf(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Envía por correo
     try:
-        enviar_pdf_para_convertir(file_path)
+        enviar_pdf_via_resend_api(file_path)
         await update.message.reply_text("📤 EPUB enviado por correo electrónico.")
     except Exception as e:
         await update.message.reply_text(f"❌ Error al enviar por email: {str(e)}")
