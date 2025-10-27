@@ -1,7 +1,6 @@
 import os
 import re
 import smtplib
-import pypandoc
 from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, ContextTypes, filters
 from email.message import EmailMessage
@@ -21,44 +20,20 @@ def sanitizar_nombre(nombre_original):
     limpio = re.sub(r'[^a-zA-Z0-9_\-\.]', '_', base)  # Reemplaza caracteres no seguros
     return limpio
 
-# ✅ Conversión PDF → EPUB
-def convertir_pdf_a_epub(input_path, output_path):
-    try:
-        # Asegura que Pandoc esté disponible
-        pypandoc.download_pandoc()
-
-        # Forzar entorno con LANG definido para evitar errores de locale
-        env = os.environ.copy()
-        env['LANG'] = 'en_US.UTF-8'
-
-        # Usar subprocess directamente para más control
-        output = pypandoc.convert_file(
-            input_path,
-            'epub',
-            outputfile=output_path,
-            format='pdf',
-            extra_args=[],
-            encoding='utf-8'
-        )
-        return True
-    except Exception as e:
-        print(f"❌ Error en conversión: {e}")
-        return False
-
 # ✅ Envío por correo
-def enviar_email_epub(archivo_epub):
+def enviar_pdf_para_convertir(file_path):
     msg = EmailMessage()
-    msg["Subject"] = " "  # Vacío para Kindle
+    msg["Subject"] = "Convert"  # Este asunto activa la conversión en Amazon
     msg["From"] = EMAIL_FROM
     msg["To"] = EMAIL_TO
-    msg.set_content("Envío automático a Kindle desde tu bot de Telegram.")
+    msg.set_content("Archivo PDF enviado automáticamente desde tu bot de Telegram.")
 
-    with open(archivo_epub, "rb") as f:
+    with open(file_path, "rb") as f:
         msg.add_attachment(
             f.read(),
             maintype="application",
-            subtype="epub+zip",
-            filename=os.path.basename(archivo_epub)
+            subtype="pdf",
+            filename=os.path.basename(file_path)
         )
 
     with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
@@ -77,26 +52,17 @@ async def handle_pdf(update: Update, context: ContextTypes.DEFAULT_TYPE):
     original_name = document.file_name
     base_name = sanitizar_nombre(original_name)
     safe_pdf_name = f"{base_name}.pdf"
-    safe_epub_name = f"{base_name}.epub"
 
     file_path = os.path.join(DOWNLOAD_DIR, safe_pdf_name)
-    epub_path = os.path.join(DOWNLOAD_DIR, safe_epub_name)
 
     # Descarga el archivo
     file = await document.get_file()
     await file.download_to_drive(file_path)
     await update.message.reply_text(f"✅ PDF guardado como: {safe_pdf_name}")
 
-    # Convierte a EPUB
-    success = convertir_pdf_a_epub(file_path, epub_path)
-    if not success:
-        await update.message.reply_text("❌ Error al convertir a EPUB.")
-        return
-    await update.message.reply_text("📚 EPUB creado con éxito.")
-
     # Envía por correo
     try:
-        enviar_email_epub(epub_path)
+        enviar_pdf_para_convertir(file_path)
         await update.message.reply_text("📤 EPUB enviado por correo electrónico.")
     except Exception as e:
         await update.message.reply_text(f"❌ Error al enviar por email: {str(e)}")
@@ -104,8 +70,7 @@ async def handle_pdf(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Limpieza
     try:
         os.remove(file_path)
-        os.remove(epub_path)
-        print(f"🧹 Archivos eliminados: {file_path}, {epub_path}")
+        print(f"🧹 Archivos eliminados: {file_path}")
     except Exception as e:
         print(f"❌ Error al eliminar archivos: {e}")
 
