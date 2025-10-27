@@ -1,4 +1,5 @@
 import os
+import locale
 import re
 import smtplib
 import pypandoc
@@ -24,6 +25,10 @@ def sanitizar_nombre(nombre_original):
 # ✅ Conversión PDF → EPUB
 def convertir_pdf_a_epub(input_path, output_path):
     try:
+        # Fijar locale para evitar errores de entorno
+        locale.setlocale(locale.LC_ALL, 'en_US.UTF-8')
+        
+        # Descargar pandoc si hace falta
         pypandoc.download_pandoc()  # Asegura que pandoc esté disponible
         pypandoc.convert_file(input_path, 'epub', outputfile=output_path)
         return True
