@@ -23,19 +23,22 @@ async def handle_pdf(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Conversión a EPUB
     epub_path = file_path.replace(".pdf", ".epub")
-    try:
-        convert(input_file=file_path, output_file=epub_path)
-        await update.message.reply_text(f"📚 Archivo convertido a EPUB: {os.path.basename(epub_path)}")
-    except Exception as e:
-        await update.message.reply_text(f"⚠️ Error al convertir el archivo: {str(e)}")
-        return
+    success = convertir_pdf_a_epub(file_path, epub_path)
 
-    try:
+    if success:
+        await update.message.reply_text(f"📚 Archivo convertido a EPUB: {os.path.basename(epub_path)}")
         enviar_email_epub(epub_path)
         await update.message.reply_text("📤 EPUB enviado por correo electrónico.")
+    else:
+        await update.message.reply_text("❌ No se pudo convertir el archivo a EPUB.")
+
+def convertir_pdf_a_epub(input_path, output_path):
+    try:
+        output = pypandoc.convert_file(input_path, 'epub', outputfile=output_path)
+        return True
     except Exception as e:
-        await update.message.reply_text(f"⚠️ Error al enviar el archivo por correo electrónico: {str(e)}")
-        return
+        print(f"Error al convertir: {e}")
+        return False
 
 def enviar_email_epub(archivo_epub):
     msg = EmailMessage()
