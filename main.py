@@ -1,55 +1,35 @@
 import os
-import requests
-import base64
 import re
-import smtplib
+import base64
+import requests
 from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, ContextTypes, filters
 from email.message import EmailMessage
 
-# Configuración desde Railway (Variables de entorno)
+# 🔐 Variables de entorno (añádelas en Railway)
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
-EMAIL_FROM = os.environ.get("EMAIL_FROM")         # Correo emisor autorizado
-EMAIL_PASSWORD = os.environ.get("EMAIL_PASSWORD") # Contraseña de aplicación
-EMAIL_TO = os.environ.get("EMAIL_TO")             # Dirección de destino (ej: tu@kindle.com)
+RESEND_API_KEY = os.environ.get("RESEND_API_KEY")
+EMAIL_TO = os.environ.get("EMAIL_TO")  # ej: tunombre@kindle.com
+EMAIL_FROM = os.environ.get("RESEND_SMTP_FROM_ADDRESS")  # ej: noreply@resend.dev
 
 DOWNLOAD_DIR = "downloads"
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
-# ✅ Función para sanitizar nombre de archivo (conserva formato legible)
+# 🔠 Sanitiza el nombre del archivo (sin espacios raros)
 def sanitizar_nombre(nombre_original):
-    base = os.path.splitext(nombre_original)[0]  # "Op-Cap. 1131"
-    limpio = re.sub(r'[^a-zA-Z0-9_\-\.]', '_', base)  # Reemplaza caracteres no seguros
+    base = os.path.splitext(nombre_original)[0]
+    limpio = re.sub(r'[^a-zA-Z0-9_\-\.]', '_', base)
     return limpio
 
-# ✅ Envío por correo
-def enviar_pdf_para_convertir(file_path):
-    msg = EmailMessage()
-    msg["Subject"] = "Convert"  # Este asunto activa la conversión en Amazon
-    msg["From"] = EMAIL_FROM
-    msg["To"] = EMAIL_TO
-    msg.set_content("Archivo PDF enviado automáticamente desde tu bot de Telegram.")
-
-    with open(file_path, "rb") as f:
-        msg.add_attachment(
-            f.read(),
-            maintype="application",
-            subtype="pdf",
-            filename=os.path.basename(file_path)
-        )
-
-    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
-        smtp.login(EMAIL_FROM, EMAIL_PASSWORD)
-        smtp.send_message(msg)
-
+# 📤 Envía el PDF a Kindle usando Resend API
 def enviar_pdf_via_resend_api(file_path):
     with open(file_path, "rb") as f:
         contenido = base64.b64encode(f.read()).decode()
 
     data = {
-        "from": f"Tu Bot <{os.environ['EMAIL_FROM']}>",
-        "to": [os.environ["EMAIL_TO"]],
-        "subject": "Convert",
+        "from": f"Telegram Bot <{EMAIL_FROM}>",
+        "to": [EMAIL_TO],
+        "subject": "Convert",  # 🧠 Hace que Kindle lo convierta automáticamente
         "attachments": [
             {
                 "filename": os.path.basename(file_path),
@@ -60,14 +40,15 @@ def enviar_pdf_via_resend_api(file_path):
     }
 
     headers = {
-        "Authorization": f"Bearer {os.environ['RESEND_API_KEY']}",
+        "Authorization": f"Bearer {RESEND_API_KEY}",
         "Content-Type": "application/json"
     }
 
     response = requests.post("https://api.resend.com/emails", json=data, headers=headers)
-    print(f"Resend API status: {response.status_code}, body: {response.text}")
+    print(f"Resend API → Status: {response.status_code}, Body: {response.text}")
+    return response.status_code == 202
 
-# ✅ Manejador del bot cuando recibe un PDF
+# 🤖 Manejador de archivos PDF
 async def handle_pdf(update: Update, context: ContextTypes.DEFAULT_TYPE):
     document = update.message.document
     if not document.file_name.endswith(".pdf"):
@@ -75,33 +56,31 @@ async def handle_pdf(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text("📥 Recibiendo PDF...")
 
-    # Sanitiza nombre y genera rutas
+    # Ruta de archivo segura
     original_name = document.file_name
-    base_name = sanitizar_nombre(original_name)
-    safe_pdf_name = f"{base_name}.pdf"
+    safe_name = f"{sanitizar_nombre(original_name)}.pdf"
+    file_path = os.path.join(DOWNLOAD_DIR, safe_name)
 
-    file_path = os.path.join(DOWNLOAD_DIR, safe_pdf_name)
-
-    # Descarga el archivo
+    # Descarga
     file = await document.get_file()
     await file.download_to_drive(file_path)
-    await update.message.reply_text(f"✅ PDF guardado como: {safe_pdf_name}")
+    await update.message.reply_text(f"✅ PDF guardado como: {safe_name}")
 
-    # Envía por correo
-    try:
-        enviar_pdf_via_resend_api(file_path)
-        await update.message.reply_text("📤 EPUB enviado por correo electrónico.")
-    except Exception as e:
-        await update.message.reply_text(f"❌ Error al enviar por email: {str(e)}")
+    # Envío por Resend
+    success = enviar_pdf_via_resend_api(file_path)
+    if success:
+        await update.message.reply_text("📤 PDF enviado a Kindle (convertible).")
+    else:
+        await update.message.reply_text("❌ Error al enviar PDF. Revisa los logs.")
 
     # Limpieza
     try:
         os.remove(file_path)
-        print(f"🧹 Archivos eliminados: {file_path}")
+        print(f"🧹 Archivo eliminado: {file_path}")
     except Exception as e:
-        print(f"❌ Error al eliminar archivos: {e}")
+        print(f"❌ Error al eliminar archivo: {e}")
 
-# ✅ Inicio del bot
+# 🚀 Inicio del bot
 if __name__ == "__main__":
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
     app.add_handler(MessageHandler(filters.Document.PDF, handle_pdf))
