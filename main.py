@@ -22,31 +22,35 @@ def sanitizar_nombre(nombre_original):
     return limpio
 
 # 📤 Envía el PDF a Kindle usando Resend API
-def enviar_pdf_via_resend_api(file_path):
+def enviar_pdf_via_sendgrid(file_path):
     with open(file_path, "rb") as f:
-        contenido = base64.b64encode(f.read()).decode()
+        encoded = base64.b64encode(f.read()).decode()
 
     data = {
-        "from": f"Telegram Bot <{EMAIL_FROM}>",
-        "to": [EMAIL_TO],
-        "subject": "Convert",  # 🧠 Hace que Kindle lo convierta automáticamente
-        "attachments": [
-            {
-                "filename": os.path.basename(file_path),
-                "content": contenido,
-                "type": "application/pdf"
-            }
-        ],
-        "html": "PDF enviado desde Telegram",
+        "personalizations": [{
+            "to": [{"email": os.environ["EMAIL_TO"]}],
+            "subject": "Convert"
+        }],
+        "from": {"email": os.environ["EMAIL_FROM"]},
+        "content": [{
+            "type": "text/plain",
+            "value": "Envío automático desde bot de Telegram"
+        }],
+        "attachments": [{
+            "content": encoded,
+            "type": "application/pdf",
+            "filename": os.path.basename(file_path),
+            "disposition": "attachment"
+        }]
     }
 
     headers = {
-        "Authorization": f"Bearer {RESEND_API_KEY}",
+        "Authorization": f"Bearer {os.environ['SENDGRID_API_KEY']}",
         "Content-Type": "application/json"
     }
 
-    response = requests.post("https://api.resend.com/emails", json=data, headers=headers)
-    print(f"Resend API → Status: {response.status_code}, Body: {response.text}")
+    response = requests.post("https://api.sendgrid.com/v3/mail/send", json=data, headers=headers)
+    print(f"SendGrid status: {response.status_code}, body: {response.text}")
     return response.status_code == 202
 
 # 🤖 Manejador de archivos PDF
@@ -68,7 +72,7 @@ async def handle_pdf(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"✅ PDF guardado como: {safe_name}")
 
     # Envío por Resend
-    success = enviar_pdf_via_resend_api(file_path)
+    success = enviar_pdf_via_sendgrid(file_path)
     if success:
         await update.message.reply_text("📤 PDF enviado a Kindle (convertible).")
     else:
