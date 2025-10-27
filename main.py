@@ -36,7 +36,8 @@ def enviar_pdf_via_resend_api(file_path):
                 "content": contenido,
                 "type": "application/pdf"
             }
-        ]
+        ],
+        "html": "PDF enviado desde Telegram",
     }
 
     headers = {
