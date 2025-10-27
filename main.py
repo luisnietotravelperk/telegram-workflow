@@ -29,7 +29,7 @@ def enviar_pdf_via_sendgrid(file_path):
     data = {
         "personalizations": [{
             "to": [{"email": os.environ["EMAIL_TO"]}],
-            "subject": "Convert"
+            "subject": " "
         }],
         "from": {"email": os.environ["EMAIL_FROM"]},
         "content": [{
